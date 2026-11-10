@@ -1,8 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:lab1/widgets/custom_button.dart';
 
-class ProfileScreen extends StatelessWidget {
+import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
+import 'package:lab1/domain/repositories/i_auth_repository.dart';
+import 'package:lab1/ui/widgets/custom_button.dart';
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final IAuthRepository _authRepository = SharedPrefsAuthRepository();
+  String _userName = 'Завантаження...';
+  String _userEmail = 'Завантаження...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final name = await _authRepository.getCurrentUser();
+    final email = await _authRepository.getCurrentEmail();
+    if (!mounted) return;
+    setState(() {
+      _userName = name ?? 'Користувач';
+      _userEmail = email ?? 'valeri@gmail.com';
+    });
+  }
+
+  Future<void> _handleLogout() async {
+    await _authRepository.logOut();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,24 +63,22 @@ class ProfileScreen extends StatelessWidget {
             child: Icon(Icons.person, size: 50, color: Colors.grey),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Валерія',
+          Text(
+            _userName,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Color(0xFF2D3142),
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'valeri@gmail.com',
+          Text(
+            _userEmail,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.black54),
+            style: const TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 40),
-
-          // Меню налаштувань
           _buildProfileOption(
             Icons.settings,
             'Налаштування системи',
@@ -62,19 +94,8 @@ class ProfileScreen extends StatelessWidget {
             'Безпека та приватність',
             Colors.teal,
           ),
-
           const SizedBox(height: 40),
-          CustomButton(
-            text: 'ВИЙТИ З АКАУНТУ',
-            onPressed: () {
-              // Повертаємося на екран логіну, очищаючи історію навігації
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/login',
-                (route) => false,
-              );
-            },
-          ),
+          CustomButton(text: 'ВИЙТИ З АКАУНТУ', onPressed: _handleLogout),
         ],
       ),
     );
@@ -109,9 +130,7 @@ class ProfileScreen extends StatelessWidget {
           size: 16,
           color: Colors.grey,
         ),
-        onTap: () {
-          // TODO: Додати переходи на відповідні екрани
-        },
+        onTap: () {},
       ),
     );
   }
