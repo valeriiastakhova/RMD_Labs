@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:lab1/screens/dashboard_screen.dart';
-import 'package:lab1/screens/login_screen.dart';
-import 'package:lab1/screens/profile_screen.dart';
-import 'package:lab1/screens/registration_screen.dart';
+
+import 'package:lab1/ui/screens/dashboard_screen.dart';
+import 'package:lab1/ui/screens/login_screen.dart';
+import 'package:lab1/ui/screens/profile_screen.dart';
+import 'package:lab1/ui/screens/registration_screen.dart';
 
 void main() {
   runApp(const SmartPlantApp());
@@ -18,13 +19,11 @@ class SmartPlantApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.green,
-        scaffoldBackgroundColor: Colors.green.shade50,
+        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
       ),
-      // Налаштування базової маршрутизації
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),
-        // Тут згодом додамо інші екрани:
         '/register': (context) => const RegistrationScreen(),
         '/dashboard': (context) => const DashboardScreen(),
         '/profile': (context) => const ProfileScreen(),
