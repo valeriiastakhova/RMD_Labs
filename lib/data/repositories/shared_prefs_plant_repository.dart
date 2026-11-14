@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SharedPrefsPlantRepository implements IPlantRepository {
   static const _currentEmailKey = 'current_user_email';
 
+  // Для кожного акаунта використовується окремий ключ зі списком рослин.
   String? _getPlantsKey(SharedPreferences prefs) {
     final currentEmail = prefs.getString(_currentEmailKey);
     if (currentEmail == null || currentEmail.isEmpty) return null;
@@ -17,8 +18,9 @@ class SharedPrefsPlantRepository implements IPlantRepository {
   Future<List<Plant>> getPlants() async {
     final prefs = await SharedPreferences.getInstance();
     final key = _getPlantsKey(prefs);
+    // Без авторизованого користувача не показуємо чужі або спільні рослини.
     if (key == null) return [];
-
+    // Шукаємо в пам'яті збережений JSON-рядок із рослинами
     final String? plantsJson = prefs.getString(key);
     if (plantsJson == null) return [];
 
@@ -32,6 +34,7 @@ class SharedPrefsPlantRepository implements IPlantRepository {
   Future<void> addPlant(Plant plant) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _getPlantsKey(prefs);
+    // Не зберігаємо рослину, якщо користувач не ввійшов в акаунт.
     if (key == null) return;
 
     final plants = await getPlants();
@@ -43,6 +46,7 @@ class SharedPrefsPlantRepository implements IPlantRepository {
   Future<void> updatePlant(Plant plant) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _getPlantsKey(prefs);
+    // Редагування виконується тільки у сховищі поточного акаунта.
     if (key == null) return;
 
     final plants = await getPlants();
@@ -57,6 +61,7 @@ class SharedPrefsPlantRepository implements IPlantRepository {
   Future<void> deletePlant(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _getPlantsKey(prefs);
+    // Видаляємо рослину лише зі списку поточного користувача.
     if (key == null) return;
 
     final plants = await getPlants();
