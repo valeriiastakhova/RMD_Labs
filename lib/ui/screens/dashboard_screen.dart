@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:lab1/data/repositories/shared_prefs_plant_repository.dart';
+import 'package:lab1/data/services/mqtt_service.dart';
+import 'package:lab1/data/services/network_service.dart';
 import 'package:lab1/domain/models/plant.dart';
 import 'package:lab1/domain/repositories/i_plant_repository.dart';
 import 'package:lab1/ui/widgets/plant_card.dart';
@@ -19,7 +23,9 @@ class PlantTheme {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final bool startedOffline;
+
+  const DashboardScreen({super.key, this.startedOffline = false});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -29,6 +35,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final IPlantRepository _plantRepository = SharedPrefsPlantRepository();
   List<Plant> _plants = [];
   bool _isLoading = true;
+
+  final NetworkService _networkService = NetworkService();
+  final MqttService _mqttService = MqttService();
+
+  StreamSubscription<bool>? _networkSub;
+  StreamSubscription<String>? _mqttDataSub;
+  StreamSubscription<bool>? _mqttStatusSub;
+
+  late bool _isOnline;
+  bool _isMqttConnected = false;
 
   static const List<PlantTheme> _plantThemes = [
     PlantTheme(
@@ -61,7 +77,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _isOnline = !widget.startedOffline;
     _loadPlants();
+    _initNetworkAndMqtt();
+  }
+
+  Future<void> _initNetworkAndMqtt() async {
+    final connected = await _networkService.hasConnection();
+    if (mounted) {
+      setState(() => _isOnline = connected);
+    }
+
+    _networkSub = _networkService.onConnectionChange.listen((isConnected) {
+      if (!mounted) return;
+      setState(() => _isOnline = isConnected);
+      if (isConnected && !_isMqttConnected) {
+        _mqttService.connect();
+      }
+    });
+
+    _mqttStatusSub = _mqttService.connectionStatusStream.listen((status) {
+      if (!mounted) return;
+      setState(() => _isMqttConnected = status);
+    });
+
+    _mqttDataSub = _mqttService.sensorDataStream.listen((payload) {
+      if (!mounted) return;
+      _processMqttPayload(payload);
+    });
+
+    if (connected) {
+      await _mqttService.connect();
+    }
+  }
+
+  Future<void> _processMqttPayload(String payload) async {
+    final updated = MqttService.applyTelemetryToPlants(_plants, payload);
+    if (updated != null) {
+      await _plantRepository.updatePlant(updated);
+      await _loadPlants();
+    }
+  }
+
+  @override
+  void dispose() {
+    _networkSub?.cancel();
+    _mqttDataSub?.cancel();
+    _mqttStatusSub?.cancel();
+    _mqttService.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPlants() async {
@@ -236,6 +300,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _isMqttConnected
+                    ? Colors.green.shade100
+                    : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sensors,
+                    size: 16,
+                    color: _isMqttConnected
+                        ? Colors.green.shade800
+                        : Colors.grey.shade700,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isMqttConnected ? 'Online' : 'Offline',
+                    style: TextStyle(
+                      color: _isMqttConnected
+                          ? Colors.green.shade800
+                          : Colors.grey.shade700,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: InkWell(
@@ -256,51 +355,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _plants.isEmpty
-                  ? const Center(
+        child: Column(
+          children: [
+            if (!_isOnline)
+              Container(
+                width: double.infinity,
+                color: Colors.red.shade700,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: const Row(
+                  children: [
+                    Icon(Icons.wifi_off, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        'Список рослин порожній.\nНатисніть "+", щоб додати!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                        'Відсутнє інтернет-з\'єднання. '
+                        'Режим обмеженої функціональності.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            constraints.maxWidth > 600 ? 3 : 2;
-
-                        return GridView.builder(
-                          itemCount: _plants.length,
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 0.9,
-                          ),
-                          itemBuilder: (context, index) {
-                            final plant = _plants[index];
-                            final theme = _plantThemes[
-                                plant.iconIndex % _plantThemes.length];
-
-                            return PlantCard(
-                              name: plant.name,
-                              moisture: plant.moisture,
-                              temperature: plant.temperature,
-                              icon: theme.icon,
-                              iconColor: theme.iconColor,
-                              iconBgColor: theme.bgColor,
-                              onTap: () => _showPlantDialog(plant),
-                              onDelete: () => _deletePlant(plant.id),
-                            );
-                          },
-                        );
-                      },
                     ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _plants.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Список рослин порожній.\n'
+                              'Натисніть "+", щоб додати!',
+                              textAlign: TextAlign.center,
+                              style:
+                                  TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final int crossAxisCount =
+                                  constraints.maxWidth > 600 ? 3 : 2;
+
+                              return GridView.builder(
+                                itemCount: _plants.length,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 0.9,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final plant = _plants[index];
+                                  final theme = _plantThemes[
+                                      plant.iconIndex % _plantThemes.length];
+
+                                  return PlantCard(
+                                    name: plant.name,
+                                    moisture: plant.moisture,
+                                    temperature: plant.temperature,
+                                    icon: theme.icon,
+                                    iconColor: theme.iconColor,
+                                    iconBgColor: theme.bgColor,
+                                    onTap: () => _showPlantDialog(plant),
+                                    onDelete: () => _deletePlant(plant.id),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+              ),
+            ),
+          ],
         ),
       ),
     );

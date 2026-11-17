@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
+import 'package:lab1/data/services/network_service.dart';
 import 'package:lab1/domain/repositories/i_auth_repository.dart';
 import 'package:lab1/ui/widgets/custom_button.dart';
 
@@ -13,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final IAuthRepository _authRepository = SharedPrefsAuthRepository();
+  final NetworkService _networkService = NetworkService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -35,6 +37,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!email.contains('@') || !email.contains('.')) {
       _showSnackBar('Некоректний формат пошти!');
+      return;
+    }
+
+    // Блокування входу без інтернету (вимога Лаб. №4)
+    final hasInternet = await _networkService.hasConnection();
+    if (!hasInternet) {
+      if (!mounted) return;
+      _showSnackBar('Відсутнє інтернет-з\'єднання! Вхід заблоковано.');
       return;
     }
 
