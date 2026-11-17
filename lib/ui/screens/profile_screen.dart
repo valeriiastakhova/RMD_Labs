@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
 import 'package:lab1/domain/repositories/i_auth_repository.dart';
 import 'package:lab1/ui/widgets/custom_button.dart';
@@ -33,9 +32,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
-    await _authRepository.logOut();
-    if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    final bool? shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Підтвердження виходу'),
+        content: const Text(
+          'Ви дійсно бажаєте вийти з акаунту? '
+          'Для повторного входу знадобиться підключення до інтернету.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text(
+              'Скасувати',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Вийти',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      await _authRepository.logOut();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
   }
 
   @override
