@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
-
-import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
 import 'package:lab1/data/services/network_service.dart';
 import 'package:lab1/domain/repositories/i_auth_repository.dart';
 import 'package:lab1/ui/widgets/custom_button.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final IAuthRepository authRepository;
+  const LoginScreen({required this.authRepository, super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final IAuthRepository _authRepository = SharedPrefsAuthRepository();
   final NetworkService _networkService = NetworkService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -29,48 +27,44 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-
     if (email.isEmpty || password.isEmpty) {
       _showSnackBar('Заповніть усі поля!');
       return;
     }
-
     if (!email.contains('@') || !email.contains('.')) {
       _showSnackBar('Некоректний формат пошти!');
       return;
     }
-
-    // Блокування входу без інтернету (вимога Лаб. №4)
-    final hasInternet = await _networkService.hasConnection();
-    if (!hasInternet) {
+    if (!await _networkService.hasConnection()) {
       if (!mounted) return;
       _showSnackBar('Відсутнє інтернет-з\'єднання! Вхід заблоковано.');
       return;
     }
-
     setState(() => _isLoading = true);
-
-    final success = await _authRepository.signIn(email, password);
-
+    final success = await widget.authRepository.signIn(email, password);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (success) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/dashboard',
-        (route) => false,
-      );
+      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (r) => false);
     } else {
-      _showSnackBar('Невірний email або пароль!');
+      _showSnackBar('Помилка авторизації на сервері!');
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
+
+  InputDecoration _deco(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    filled: true,
+    fillColor: Colors.white,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -82,11 +76,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.eco, size: 100, color: Colors.green),
-                const SizedBox(height: 24),
+                const Icon(Icons.eco, size: 96, color: Colors.green),
+                const SizedBox(height: 16),
                 const Text(
                   'Smart Plant Care',
                   textAlign: TextAlign.center,
@@ -96,53 +89,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.green,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Увійдіть, щоб дбати про свої рослини',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
-                ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Електронна пошта',
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
+                  decoration: _deco('Електронна пошта', Icons.email_outlined),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Пароль',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
+                  decoration: _deco('Пароль', Icons.lock_outline),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 if (_isLoading)
                   const Center(child: CircularProgressIndicator())
                 else
                   CustomButton(text: 'УВІЙТИ', onPressed: _handleLogin),
-                const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/register');
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/register'),
                   child: const Text(
                     'Немає акаунту? Зареєструватися',
-                    style: TextStyle(color: Colors.green, fontSize: 15),
+                    style: TextStyle(color: Colors.green),
                   ),
                 ),
               ],

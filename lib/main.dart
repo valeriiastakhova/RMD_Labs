@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
+import 'package:lab1/data/repositories/remote_auth_repository.dart';
+import 'package:lab1/data/repositories/remote_plant_repository.dart';
 import 'package:lab1/data/services/network_service.dart';
+import 'package:lab1/domain/repositories/i_auth_repository.dart';
+import 'package:lab1/domain/repositories/i_plant_repository.dart';
 import 'package:lab1/ui/screens/dashboard_screen.dart';
 import 'package:lab1/ui/screens/login_screen.dart';
 import 'package:lab1/ui/screens/profile_screen.dart';
 import 'package:lab1/ui/screens/registration_screen.dart';
 
 void main() async {
-  // Обов'язково для роботи асинхронних плагінів до runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  final authRepository = SharedPrefsAuthRepository();
-  final networkService = NetworkService();
-
-  // Перевіряємо збережену сесію та наявність інтернету
-  final currentEmail = await authRepository.getCurrentEmail();
-  final hasInternet = await networkService.hasConnection();
-
-  final bool isLoggedIn = currentEmail != null && currentEmail.isNotEmpty;
+  final IAuthRepository authRepo = RemoteAuthRepository();
+  final IPlantRepository plantRepo = RemotePlantRepository();
+  final savedEmail = await authRepo.getCurrentEmail();
+  final isOnline = await NetworkService().hasConnection();
 
   runApp(
     SmartPlantApp(
-      initialRoute: isLoggedIn ? '/dashboard' : '/login',
-      startedOffline: isLoggedIn && !hasInternet,
+      initialRoute: savedEmail != null ? '/dashboard' : '/login',
+      startedOffline: !isOnline,
+      authRepository: authRepo,
+      plantRepository: plantRepo,
     ),
   );
 }
@@ -30,29 +30,32 @@ void main() async {
 class SmartPlantApp extends StatelessWidget {
   final String initialRoute;
   final bool startedOffline;
+  final IAuthRepository authRepository;
+  final IPlantRepository plantRepository;
 
   const SmartPlantApp({
+    required this.initialRoute,
+    required this.startedOffline,
+    required this.authRepository,
+    required this.plantRepository,
     super.key,
-    this.initialRoute = '/login',
-    this.startedOffline = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Plant Care',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
-      ),
+      title: 'Smart Plant Care',
       initialRoute: initialRoute,
       routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegistrationScreen(),
-        '/dashboard': (context) =>
-            DashboardScreen(startedOffline: startedOffline),
-        '/profile': (context) => const ProfileScreen(),
+        '/login': (context) => LoginScreen(authRepository: authRepository),
+        '/register': (context) =>
+            RegistrationScreen(authRepository: authRepository),
+        '/dashboard': (context) => DashboardScreen(
+          plantRepository: plantRepository,
+          startedOffline: startedOffline,
+        ),
+        '/profile': (context) => ProfileScreen(authRepository: authRepository),
       },
     );
   }
