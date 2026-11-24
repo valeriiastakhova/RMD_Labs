@@ -8,7 +8,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:uuid/uuid.dart';
 
 class MqttService {
-  static const String broker = 'broker.hivemq.com';
+  static const String broker = 'broker.emqx.io';
   static const String topic = 'plant_app_valeriia/sensors';
 
   MqttServerClient? _client;
@@ -42,7 +42,7 @@ class MqttService {
 
     _isConnecting = true;
     try {
-      await _client!.connect().timeout(const Duration(seconds: 5));
+      await _client!.connect().timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('MQTT Connection failed: $e');
       _statusController.add(false);

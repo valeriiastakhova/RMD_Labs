@@ -1,75 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
 import 'package:lab1/domain/repositories/i_auth_repository.dart';
 import 'package:lab1/ui/widgets/custom_button.dart';
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+typedef ProfileData = Map<String, String>;
 
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
+class ProfileScreen extends StatelessWidget {
+  final IAuthRepository authRepository;
+  const ProfileScreen({required this.authRepository, super.key});
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final IAuthRepository _authRepository = SharedPrefsAuthRepository();
-  String _userName = 'Завантаження...';
-  String _userEmail = 'Завантаження...';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
+  Future<ProfileData> _loadProfile() async {
+    final name = await authRepository.getCurrentUser() ?? 'Користувач';
+    final email = await authRepository.getCurrentEmail() ?? 'user@plant.app';
+    return {'name': name, 'email': email};
   }
 
-  Future<void> _loadUserData() async {
-    final name = await _authRepository.getCurrentUser();
-    final email = await _authRepository.getCurrentEmail();
-    if (!mounted) return;
-    setState(() {
-      _userName = name ?? 'Користувач';
-      _userEmail = email ?? 'valeri@gmail.com';
-    });
-  }
-
-  Future<void> _handleLogout() async {
-    final bool? shouldLogout = await showDialog<bool>(
+  Future<void> _confirmLogout(BuildContext context) async {
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (ctx) => AlertDialog(
         title: const Text('Підтвердження виходу'),
-        content: const Text(
-          'Ви дійсно бажаєте вийти з акаунту? '
-          'Для повторного входу знадобиться підключення до інтернету.',
-        ),
+        content: const Text('Ви дійсно бажаєте вийти з облікового запису?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Скасувати',
-              style: TextStyle(color: Colors.grey),
-            ),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Скасувати'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Вийти',
-              style: TextStyle(color: Colors.white),
-            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Вийти', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-
-    if (shouldLogout == true) {
-      await _authRepository.logOut();
-      if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    if (ok == true) {
+      await authRepository.logOut();
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+      }
     }
   }
 
@@ -89,83 +56,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, size: 50, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _userName,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D3142),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _userEmail,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.black54),
-          ),
-          const SizedBox(height: 40),
-          _buildProfileOption(
-            Icons.settings,
-            'Налаштування системи',
-            Colors.blueGrey,
-          ),
-          _buildProfileOption(
-            Icons.notifications_active,
-            'Сповіщення датчиків',
-            Colors.orangeAccent,
-          ),
-          _buildProfileOption(
-            Icons.security,
-            'Безпека та приватність',
-            Colors.teal,
-          ),
-          const SizedBox(height: 40),
-          CustomButton(text: 'ВИЙТИ З АКАУНТУ', onPressed: _handleLogout),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileOption(IconData icon, String title, Color iconColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: iconColor),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.grey,
-        ),
-        onTap: () {},
+      body: FutureBuilder<ProfileData>(
+        future: _loadProfile(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final user = snapshot.data ?? {'name': 'Користувач', 'email': ''};
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const CircleAvatar(
+                radius: 48,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.person, size: 48, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                user['name']!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                user['email']!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, color: Colors.black54),
+              ),
+              const SizedBox(height: 36),
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const ListTile(
+                  leading: Icon(Icons.verified_user, color: Colors.green),
+                  title: Text('JWT-сесія активна'),
+                  subtitle: Text('Дані профілю збережено в офлайн-кеші'),
+                ),
+              ),
+              const SizedBox(height: 36),
+              CustomButton(
+                text: 'ВИЙТИ З АКАУНТУ',
+                onPressed: () => _confirmLogout(context),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

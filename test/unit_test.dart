@@ -1,5 +1,10 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:lab1/data/network/api_client.dart';
+import 'package:lab1/data/network/plant_dto.dart';
+import 'package:lab1/data/repositories/remote_plant_repository.dart';
 import 'package:lab1/data/repositories/shared_prefs_auth_repository.dart';
 import 'package:lab1/data/repositories/shared_prefs_plant_repository.dart';
 import 'package:lab1/data/services/mqtt_service.dart';
@@ -133,21 +138,18 @@ void main() {
       const Plant(id: '2', name: 'Орхідея', moisture: 50, temperature: 22),
     ];
 
-    test(
-      'Оновлює конкретну рослину за назвою з JSON-повідомлення',
-      () {
-        const payload =
-            '{"plant": "Орхідея", "moisture": 30, "temperature": 25.4}';
+    test('Оновлює конкретну рослину за назвою з JSON-повідомлення', () {
+      const payload =
+          '{"plant": "Орхідея", "moisture": 30, "temperature": 25.4}';
 
-        final result = MqttService.applyTelemetryToPlants(plants, payload);
+      final result = MqttService.applyTelemetryToPlants(plants, payload);
 
-        expect(result, isNotNull);
-        expect(result!.id, '2');
-        expect(result.name, 'Орхідея');
-        expect(result.moisture, 30);
-        expect(result.temperature, 25); // округлено з 25.4
-      },
-    );
+      expect(result, isNotNull);
+      expect(result!.id, '2');
+      expect(result.name, 'Орхідея');
+      expect(result.moisture, 30);
+      expect(result.temperature, 25); // округлено з 25.4
+    });
 
     test('Оновлює першу рослину, якщо поле plant не вказане в JSON', () {
       const payload = '{"moisture": 72}';
@@ -184,12 +186,59 @@ void main() {
       expect(checkConnectivity([ConnectivityResult.mobile]), isTrue);
     });
 
+    test('Повертає false при відсутності інтернету '
+        '(ConnectivityResult.none)', () {
+      expect(checkConnectivity([ConnectivityResult.none]), isFalse);
+      expect(checkConnectivity([]), isFalse);
+    });
+  });
+
+  group('6. REST API DTO & Offline-First Repository Unit Tests', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await SharedPrefsAuthRepository().signUp(
+        'Валерія',
+        'valeri@gmail.com',
+        'pass123',
+      );
+    });
+
+    test('PlantDto коректно мапить JSON із зовнішнього REST API', () {
+      final plant = PlantDto.fromRemoteJson({
+        'id': 2,
+        'title': 'delectus aut autem',
+      });
+      expect(plant.id, '2');
+      expect(plant.name, 'Монстера Деліціоза');
+      expect(plant.moisture, greaterThan(0));
+      expect(plant.temperature, greaterThan(0));
+    });
+
     test(
-      'Повертає false при відсутності інтернету '
-      '(ConnectivityResult.none)',
-      () {
-        expect(checkConnectivity([ConnectivityResult.none]), isFalse);
-        expect(checkConnectivity([]), isFalse);
+      'RemotePlantRepository повертає кеш при помилці мережі (Offline-First)',
+      () async {
+        final localCache = SharedPrefsPlantRepository();
+        await localCache.addPlant(
+          const Plant(
+            id: 'cached_1',
+            name: 'Кешований Фікус',
+            moisture: 55,
+            temperature: 23,
+          ),
+        );
+
+        final failingClient = ApiClient(
+          client: MockClient((_) async => http.Response('Server Error', 500)),
+        );
+        final remoteRepo = RemotePlantRepository(
+          api: failingClient,
+          cache: localCache,
+        );
+
+        final result = await remoteRepo.getPlants();
+        expect(remoteRepo.isFromCache, isTrue);
+        expect(result.length, 1);
+        expect(result.first.name, 'Кешований Фікус');
       },
     );
   });
